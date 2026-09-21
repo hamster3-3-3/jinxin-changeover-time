@@ -178,15 +178,16 @@
 
     function setStatus(text, ready=false){ $('status').classList.toggle('ready',ready); $('status').querySelector('span').textContent=text; }
     function filtered(start,end){ return state.data.days.filter(d=>d.date>=start&&d.date<=end); }
-    function summarize(days, periodDays){
+    function summarize(days){
       const out={};
-      for(const line of state.data.lines) out[line.id]={dailyAverageSum:0,count:0,avg:periodDays?0:NaN};
+      const dataDays=days.length;
+      for(const line of state.data.lines) out[line.id]={dailyAverageSum:0,count:0,dataDays,avg:dataDays?0:NaN};
       for(const day of days) for(const line of state.data.lines){
         const x=day.lines[line.id]||{}, count=Number(x.count||0), minutes=Number(x.minutes||0);
         out[line.id].count+=count;
         if(count>0) out[line.id].dailyAverageSum+=minutes/count;
       }
-      for(const line of state.data.lines) if(periodDays) out[line.id].avg=out[line.id].dailyAverageSum/periodDays;
+      for(const line of state.data.lines) if(dataDays) out[line.id].avg=out[line.id].dailyAverageSum/dataDays;
       return out;
     }
     function productStats(days,lineId){
@@ -231,17 +232,17 @@
     }
     function render(){
       const r=selectedRanges(), currentDays=filtered(r.start,r.end), previousDays=filtered(r.prevStart,r.prevEnd);
-      const cur=summarize(currentDays,r.periodDays), prev=summarize(previousDays,r.prevPeriodDays);
-      renderCards(cur,prev,r.periodDays,currentDays);
+      const cur=summarize(currentDays), prev=summarize(previousDays);
+      renderCards(cur,prev,currentDays);
       renderDetail(r);
       renderCharts(r,currentDays,cur,prev);
     }
-    function renderCards(cur,prev,periodDays,currentDays){
+    function renderCards(cur,prev,currentDays){
       $('lineCards').innerHTML=state.data.lines.map((line,i)=>{
         const a=cur[line.id], b=prev[line.id], imp=improvement(a.avg,b.avg), longest=averageLongestProduct(currentDays,line.id);
         const delta=Number.isFinite(imp.delta)?`${imp.delta>0?'+':''}${fmt(imp.delta)} 分`:'—';
         const longestText=longest?`${esc(longest.product)} ${fmt(longest.avg)} 分`:'無換線記錄';
-        return `<article class="panel line-card${state.selectedLine===line.id?' active':''}" style="--accent:${COLORS[i]}" data-line="${line.id}" role="button" tabindex="0" aria-pressed="${state.selectedLine===line.id}"><div class="line-name">${esc(line.name)}</div><div><span class="avg">${fmt(a.avg)}</span> <span class="unit">分</span></div><div class="compare"><span class="delta">較${periodLabels().previous} ${delta}</span><span class="badge ${imp.kind}">${imp.label}</span></div><div class="card-meta">${periodDays} 天平均 ｜ 平均換線最久品項：${longestText}</div></article>`;
+        return `<article class="panel line-card${state.selectedLine===line.id?' active':''}" style="--accent:${COLORS[i]}" data-line="${line.id}" role="button" tabindex="0" aria-pressed="${state.selectedLine===line.id}"><div class="line-name">${esc(line.name)}</div><div><span class="avg">${fmt(a.avg)}</span> <span class="unit">分</span></div><div class="compare"><span class="delta">較${periodLabels().previous} ${delta}</span><span class="badge ${imp.kind}">${imp.label}</span></div><div class="card-meta">平均換線最久品項：${longestText}</div></article>`;
       }).join('');
     }
     function renderDetail(range){
@@ -306,7 +307,7 @@
     }
     async function downloadReportPdf(){
       if(!window.PDFLib)throw new Error('PDF 元件載入失敗');
-      const range=selectedRanges(),currentDays=filtered(range.start,range.end),previousDays=filtered(range.prevStart,range.prevEnd),cur=summarize(currentDays,range.periodDays),prev=summarize(previousDays,range.prevPeriodDays),data=reportData(range,currentDays,previousDays,cur,prev);
+      const range=selectedRanges(),currentDays=filtered(range.start,range.end),previousDays=filtered(range.prevStart,range.prevEnd),cur=summarize(currentDays),prev=summarize(previousDays),data=reportData(range,currentDays,previousDays,cur,prev);
       const page1=reportCanvas(),page2=reportCanvas(),subtitle=`${data.labels.current} ${range.start} ～ ${range.end}；${data.labels.previous} ${range.prevStart} ～ ${range.prevEnd}`;
       drawReportHeader(page1.ctx,'晉欣換線時間分析報告',subtitle);drawKpis(page1.ctx,data);drawReportChart(page1.ctx,data);page1.ctx.fillStyle='#77889d';page1.ctx.font='650 18px "Microsoft JhengHei","Noto Sans TC",sans-serif';page1.ctx.fillText('平均換線時間越低代表改善；計算依目前網站所選年／月／週／日範圍。',55,1085);drawAnalysisPage(page2.ctx,data);
       const pdf=await PDFLib.PDFDocument.create();
@@ -317,9 +318,9 @@
       const byDate=new Map(days.map(x=>[x.date,x])),buckets=[];
       if(state.rangeMode==='year'){
         const year=Number(range.start.slice(0,4));
-        for(let month=1;month<=12;month++){const m=monthRange(year,month),periodDays=daysBetween(m.start,m.end);buckets.push({label:`${month}月`,days:filtered(m.start,m.end),periodDays});}
+        for(let month=1;month<=12;month++){const m=monthRange(year,month);buckets.push({label:`${month}月`,days:filtered(m.start,m.end)});}
       }else{
-        for(let d=range.start;d<=range.end;d=shiftDays(d,1))buckets.push({label:shortDate(d),days:byDate.has(d)?[byDate.get(d)]:[],periodDays:1});
+        for(let d=range.start;d<=range.end;d=shiftDays(d,1))buckets.push({label:shortDate(d),days:byDate.has(d)?[byDate.get(d)]:[]});
       }
       return buckets;
     }
@@ -329,7 +330,7 @@
       $('compareTitle').textContent=`${labels.current}與${labels.previous}對比`;
       $('trendMeta').textContent=state.rangeMode==='year'?'12 個月別區間':`${buckets.length} 個日別區間`;
       if(state.trend) state.trend.destroy();
-      state.trend=new Chart($('trendChart'),{type:'line',data:{labels:buckets.map(x=>x.label),datasets:state.data.lines.map((line,i)=>({label:line.name,data:buckets.map(b=>summarize(b.days,b.periodDays)[line.id].avg),borderColor:COLORS[i],backgroundColor:COLORS[i],borderWidth:2.5,pointRadius:buckets.length>24?0:3,pointHoverRadius:5,tension:.25,hidden:!state.visible.has(line.id)}))},options:chartOptions()});
+      state.trend=new Chart($('trendChart'),{type:'line',data:{labels:buckets.map(x=>x.label),datasets:state.data.lines.map((line,i)=>({label:line.name,data:buckets.map(b=>summarize(b.days)[line.id].avg),borderColor:COLORS[i],backgroundColor:COLORS[i],borderWidth:2.5,pointRadius:buckets.length>24?0:3,pointHoverRadius:5,tension:.25,hidden:!state.visible.has(line.id)}))},options:chartOptions()});
       if(state.compare) state.compare.destroy();
       state.compare=new Chart($('compareChart'),{type:'bar',data:{labels:state.data.lines.map(x=>x.name),datasets:[{label:labels.current,data:state.data.lines.map(x=>cur[x.id].avg),backgroundColor:'#1967d2',borderRadius:6},{label:labels.previous,data:state.data.lines.map(x=>prev[x.id].avg),backgroundColor:'#b9c6d6',borderRadius:6}]},options:{...chartOptions(),plugins:{...chartOptions().plugins,legend:{display:true,labels:{font:{weight:'bold'},usePointStyle:true}}}}});
     }
@@ -367,9 +368,9 @@
       $('linePicker').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const id=b.dataset.line;if(state.visible.has(id))state.visible.delete(id);else state.visible.add(id);b.classList.toggle('off',!state.visible.has(id));render();});
     }
     function exportCsv(){
-      const r=selectedRanges(), cur=summarize(filtered(r.start,r.end),r.periodDays), prev=summarize(filtered(r.prevStart,r.prevEnd),r.prevPeriodDays);
-      const labels=periodLabels(),rows=[['線別',`${labels.current}平均(分)`,`${labels.previous}平均(分)`,'差異(分)',`${labels.current}天數`,`${labels.current}合格次數`]];
-      for(const line of state.data.lines){const a=cur[line.id],b=prev[line.id];rows.push([line.name,fmt(a.avg),fmt(b.avg),fmt(a.avg-b.avg),r.periodDays,a.count]);}
+      const r=selectedRanges(),currentDays=filtered(r.start,r.end),previousDays=filtered(r.prevStart,r.prevEnd),cur=summarize(currentDays),prev=summarize(previousDays);
+      const labels=periodLabels(),rows=[['線別',`${labels.current}平均(分)`,`${labels.previous}平均(分)`,'差異(分)',`${labels.current}資料天數`,`${labels.current}合格次數`]];
+      for(const line of state.data.lines){const a=cur[line.id],b=prev[line.id];rows.push([line.name,fmt(a.avg),fmt(b.avg),fmt(a.avg-b.avg),currentDays.length,a.count]);}
       const csv='\ufeff'+rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\r\n'); const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`晉欣各線別換線時間_${r.start}_${r.end}.csv`;a.click();URL.revokeObjectURL(a.href);
     }
 
