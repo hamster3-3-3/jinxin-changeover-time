@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>晉欣各線別平均換線時間追蹤平台</title>
+  <meta name="description" content="追蹤晉欣四度一至四線與綜合一至三線的平均換線時間改善趨勢。">
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      --ink: #10223f; --muted: #64748b; --line: #dce6f2; --soft: #f4f8fc;
+      --blue: #1967d2; --blue-dark: #124ca0; --good: #087f5b; --bad: #c2413b;
+      --warn: #a65f00; --radius: 18px; --shadow: 0 10px 30px rgba(27,65,112,.08);
+    }
+    * { box-sizing: border-box; }
+    html { color-scheme: light; }
+    body { margin: 0; background: #f7faff; color: var(--ink); font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; font-size: 16px; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .page { width: min(1600px, 100%); margin: auto; padding: 22px clamp(16px, 3vw, 42px) 48px; }
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+    .eyebrow { color: var(--blue); font-size: .82rem; font-weight: 900; letter-spacing: .12em; }
+    h1 { margin: 5px 0 0; font-size: clamp(1.55rem, 2.5vw, 2.2rem); line-height: 1.25; letter-spacing: -.02em; }
+    .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    .status { display: inline-flex; align-items: center; gap: 8px; color: #42526a; font-weight: 800; font-size: .9rem; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 0 4px #fef3c7; }
+    .status.ready .status-dot { background: #10b981; box-shadow: 0 0 0 4px #d1fae5; }
+    .btn { border: 1px solid #cdd9e7; border-radius: 12px; padding: .68rem .9rem; background: white; color: #243b5a; font-weight: 850; transition: .18s ease; }
+    .btn:hover { border-color: #94b2d3; background: #f8fbff; transform: translateY(-1px); }
+    .btn.primary { background: var(--blue); border-color: var(--blue); color: white; }
+    .btn.primary:hover { background: var(--blue-dark); }
+    .panel { background: rgba(255,255,255,.96); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .controls { position: sticky; top: 12px; z-index: 20; padding: 18px; backdrop-filter: blur(12px); }
+    .control-grid { display: grid; grid-template-columns: minmax(170px,.7fr) minmax(340px,1.5fr) minmax(220px,1fr); gap: 18px; align-items: end; }
+    .label { display: block; color: #50627b; font-size: .84rem; font-weight: 850; margin-bottom: 6px; }
+    .field { width: 100%; min-height: 44px; border: 1px solid #cad7e6; border-radius: 12px; padding: .65rem .75rem; background: white; color: var(--ink); font-weight: 750; }
+    .field:focus { outline: 3px solid rgba(25,103,210,.16); border-color: #659ce3; }
+    .range-switch { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+    .range-btn { min-height: 44px; border: 1px solid #cedaea; border-radius: 12px; background: white; color: #496079; font-weight: 900; }
+    .range-btn.active { color: white; background: var(--blue); border-color: var(--blue); box-shadow: 0 6px 16px rgba(25,103,210,.2); }
+    .period-panel { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+    .period-panel.single { grid-template-columns: 1fr; }
+    .period-summary { min-height: 44px; border: 1px solid #d9e4ef; border-radius: 12px; background: #f4f8fc; display: flex; align-items: center; padding: .65rem .8rem; font-weight: 900; color: #304b6d; }
+    .rule-copy { color: var(--muted); font-size: .86rem; font-weight: 700; }
+    .toggle { display: inline-flex; align-items: center; gap: 8px; color: #435873; font-size: .9rem; font-weight: 800; }
+    .toggle input { width: 18px; height: 18px; accent-color: var(--blue); }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 28px 2px 12px; }
+    .section-head h2 { margin: 0; font-size: 1.22rem; }
+    .section-head p { margin: 3px 0 0; color: var(--muted); font-size: .88rem; font-weight: 650; }
+    .line-cards { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 12px; }
+    .line-card { position: relative; padding: 15px; min-height: 190px; overflow: hidden; cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+    .line-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 48%, var(--line)); box-shadow: 0 14px 32px rgba(27,65,112,.13); }
+    .line-card:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 3px; }
+    .line-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow); }
+    .line-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--accent); }
+    .line-name { font-weight: 950; font-size: 1rem; }
+    .avg { margin-top: 14px; font-variant-numeric: tabular-nums; font-size: 2rem; line-height: 1; font-weight: 950; letter-spacing: -.04em; }
+    .unit { color: var(--muted); font-size: .8rem; font-weight: 800; }
+    .compare { margin-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 7px; }
+    .delta { font-size: .84rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .badge { border-radius: 999px; padding: .28rem .52rem; font-size: .77rem; font-weight: 950; white-space: nowrap; }
+    .badge.good { background: #dff7ee; color: var(--good); }
+    .badge.bad { background: #ffe7e3; color: var(--bad); }
+    .badge.flat { background: #edf2f7; color: #53657a; }
+    .card-meta { margin-top: 9px; color: var(--muted); font-size: .78rem; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+    .detail-panel { margin-top: 16px; overflow: hidden; }
+    .detail-head { padding: 18px 20px 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+    .detail-head h3 { margin: 0; font-size: 1.08rem; }
+    .detail-head p { margin: 4px 0 0; color: var(--muted); font-size: .84rem; font-weight: 700; }
+    .detail-scroll { max-height: 560px; overflow: auto; }
+    .detail-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .detail-table th { position: sticky; top: 0; z-index: 2; padding: 12px 16px; background: #edf4fc; color: #425b78; text-align: left; font-size: .82rem; white-space: nowrap; }
+    .detail-table td { padding: 13px 16px; border-top: 1px solid #e6edf5; vertical-align: top; }
+    .detail-table tbody tr:first-child td { border-top: 0; }
+    .detail-table tbody tr:hover td { background: #f8fbff; }
+    .detail-date { width: 130px; white-space: nowrap; font-weight: 850; font-variant-numeric: tabular-nums; }
+    .detail-avg { width: 140px; white-space: nowrap; font-size: 1.02rem; font-weight: 950; font-variant-numeric: tabular-nums; }
+    .item-list { display: flex; flex-wrap: wrap; gap: 7px; }
+    .item-time { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d8e4f0; border-radius: 999px; padding: .34rem .62rem; background: #f7faff; color: #334e70; font-size: .8rem; font-weight: 800; }
+    .item-time b { color: var(--blue-dark); font-variant-numeric: tabular-nums; }
+    .no-items { color: #8a99aa; font-size: .84rem; font-weight: 700; }
+    .report-launch { margin-top: 16px; display: flex; justify-content: center; }
+    .report-launch .btn { min-width: 240px; padding: .82rem 1.2rem; }
+    .chart-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(360px, .85fr); gap: 14px; }
+    .chart-panel { padding: 18px; min-width: 0; }
+    .chart-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 10px; }
+    .chart-title strong { font-size: 1rem; }
+    .chart-title span { color: var(--muted); font-size: .8rem; font-weight: 700; }
+    .chart-wrap { position: relative; height: 355px; }
+    .line-picker { display: flex; gap: 7px; flex-wrap: wrap; margin: 13px 0 0; }
+    .line-chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid #dae4ef; background: white; border-radius: 999px; padding: .4rem .65rem; color: #405570; font-size: .8rem; font-weight: 850; }
+    .line-chip.off { opacity: .38; }
+    .line-chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--chip); }
+    .empty { height: 220px; display: grid; place-items: center; color: var(--muted); font-weight: 800; }
+    .loading { opacity: .55; pointer-events: none; }
+    [hidden] { display: none !important; }
+    @media (max-width: 1250px) { .line-cards { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 980px) { .control-grid { grid-template-columns: 1fr 1fr; } .control-grid > :nth-child(2) { grid-column: span 2; } .chart-grid { grid-template-columns: 1fr; } .line-cards { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 620px) { .page { padding: 14px 12px 36px; } .header { align-items: flex-start; flex-direction: column; } .header-actions { justify-content: flex-start; } .controls { position: static; } .control-grid { grid-template-columns: 1fr; } .control-grid > :nth-child(2) { grid-column: auto; } .range-switch { grid-template-columns: repeat(2,1fr); } .line-cards { grid-template-columns: 1fr; } .chart-wrap { height: 310px; } .section-head { align-items: flex-start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main class="page" id="app">
+    <header class="header">
+      <div>
+        <div class="eyebrow">JINXIN CHANGEOVER TRACKER</div>
+        <h1>晉欣各線別平均換線時間追蹤平台</h1>
+      </div>
+      <div class="header-actions">
+        <span id="status" class="status"><i class="status-dot"></i><span>資料載入中</span></span>
+        <input id="fileInput" type="file" accept=".xlsx" multiple hidden>
+        <button class="btn" id="importBtn" type="button">匯入更新</button>
+        <button class="btn" id="exportBtn" type="button">匯出分析 CSV</button>
+      </div>
+    </header>
+
+    <section class="panel controls" aria-label="分析範圍">
+      <div class="control-grid">
+        <label><span class="label">年別</span><select class="field" id="yearSelect"></select></label>
+        <div><span class="label">範圍</span><div class="range-switch" id="rangeSwitch"><button class="range-btn" data-mode="year">年別</button><button class="range-btn active" data-mode="month">月別</button><button class="range-btn" data-mode="week">週別</button><button class="range-btn" data-mode="day">日別</button></div></div>
+        <div>
+          <div id="yearPanel" class="period-panel single"><div class="period-summary">顯示全年平均</div></div>
+          <div id="monthPanel" class="period-panel single"><label><span class="label">月份</span><select class="field" id="monthSelect"></select></label></div>
+          <div id="weekPanel" class="period-panel" hidden><label><span class="label">月份</span><select class="field" id="weekMonthSelect"></select></label><label><span class="label">週別（週二～週一）</span><select class="field" id="weekSelect"></select></label></div>
+          <div id="dayPanel" class="period-panel single" hidden><label><span class="label">日期</span><input class="field" id="daySelect" type="date"></label></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-head"><div><h2>各線別改善概況</h2><p>數值越低代表平均換線時間越短。</p></div></div>
+    <section class="line-cards" id="lineCards" aria-live="polite"></section>
+    <div class="section-head"><div><h2>換線時間趨勢</h2><p>依選擇期間顯示各線別平均換線時間。</p></div></div>
+    <section class="chart-grid">
+      <div class="panel chart-panel">
+        <div class="chart-title"><strong>各線別期間趨勢</strong><span id="trendMeta"></span></div>
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+        <div class="line-picker" id="linePicker"></div>
+      </div>
+      <div class="panel chart-panel">
+        <div class="chart-title"><strong id="compareTitle">當月與前月對比</strong><span>分</span></div>
+        <div class="chart-wrap"><canvas id="compareChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="panel detail-panel" id="detailPanel" hidden>
+      <div class="detail-head">
+        <div><h3 id="detailTitle">計算明細表</h3><p id="detailMeta"></p></div>
+        <button class="btn" id="closeDetail" type="button" aria-label="關閉計算明細">關閉明細</button>
+      </div>
+      <div class="detail-scroll">
+        <table class="detail-table">
+          <thead><tr><th>日期</th><th>每日平均換線時間</th><th>換線最久品項</th></tr></thead>
+          <tbody id="detailBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="report-launch"><button class="btn primary" id="generateReport" type="button">下載換線時間報告 PDF</button></div>
+
+  </main>
+
+  <script src="chart.umd.min.js"></script>
+  <script src="xlsx.full.min.js"></script>
+  <script src="pdf-lib.min.js"></script>
+  <script>
+    const SOURCE_ROOT = 'https://hamster3-3-3.github.io/jinxin-dashboard/';
+    const LINES = [{id:'four1',name:'四度一線'},{id:'four2',name:'四度二線'},{id:'four3',name:'四度三線'},{id:'four4',name:'四度四線'},{id:'mix1',name:'綜合一線'},{id:'mix2',name:'綜合二線'},{id:'mix3',name:'綜合三線'}];
+    const COLORS = ['#1967d2','#8b5cf6','#0891b2','#d97706','#16a34a','#e11d48','#52677f'];
+    const state = {data:{lines:LINES,days:[],minDate:'',maxDate:''}, visible:new Set(), trend:null, compare:null, controlsReady:false, rangeMode:'month', selectedLine:null};
+    const $ = id => document.getElementById(id);
+    const dateOnly = value => new Date(value + 'T00:00:00');
+    const iso = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    const shiftDays = (value, amount) => { const d=dateOnly(value); d.setDate(d.getDate()+amount); return iso(d); };
+    const daysBetween = (a,b) => Math.round((dateOnly(b)-dateOnly(a))/86400000)+1;
+    const fmt = n => Number.isFinite(n) ? n.toFixed(1) : '—';
+    const shortDate = s => `${Number(s.slice(5,7))}/${Number(s.slice(8,10))}`;
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    function setStatus(text, ready=false){ $('status').classList.toggle('ready',ready); $('status').querySelector('span').textContent=text; }
+    function filtered(start,end){ return state.data.days.filter(d=>d.date>=start&&d.date<=end); }
+    function summarize(days, periodDays){
+      const out={};
+      for(const line of state.data.lines) out[line.id]={dailyAverageSum:0,count:0,avg:periodDays?0:NaN};
+      for(const day of days) for(const line of state.data.lines){
+        const x=day.lines[line.id]||{}, count=Number(x.count||0), minutes=Number(x.minutes||0);
+        out[line.id].count+=count;
+        if(count>0) out[line.id].dailyAverageSum+=minutes/count;
+      }
+      for(const line of state.data.lines) if(periodDays) out[line.id].avg=out[line.id].dailyAverageSum/periodDays;
+      return out;
+    }
+    function productStats(days,lineId){
+      const stats=new Map();
+      for(const day of days){
+        const items=day.lines?.[lineId]?.items||[];
+        for(const item of items){
+          const product=String(item.product||'未命名品項'), minutes=Number(item.minutes||0);
+          if(!Number.isFinite(minutes))continue;
+          const x=stats.get(product)||{product,sum:0,count:0,avg:0,max:0};
+          x.sum+=minutes;x.count++;x.avg=x.sum/x.count;x.max=Math.max(x.max,minutes);stats.set(product,x);
+        }
+      }
+      return [...stats.values()].sort((a,b)=>b.avg-a.avg||b.max-a.max||b.count-a.count||a.product.localeCompare(b.product,'zh-Hant'));
+    }
+    function averageLongestProduct(days,lineId){return productStats(days,lineId)[0]||null;}
+    function monthRange(year,month){const start=`${year}-${String(month).padStart(2,'0')}-01`,last=new Date(year,month,0).getDate();return{start,end:`${year}-${String(month).padStart(2,'0')}-${last}`};}
+    function selectedRanges(){
+      const year=Number($('yearSelect').value);
+      let start,end,prevStart,prevEnd;
+      if(state.rangeMode==='year'){
+        start=`${year}-01-01`;end=`${year}-12-31`;prevStart=`${year-1}-01-01`;prevEnd=`${year-1}-12-31`;
+      }else if(state.rangeMode==='month'){
+        const month=Number($('monthSelect').value),cur=monthRange(year,month),pDate=new Date(year,month-2,1),prev=monthRange(pDate.getFullYear(),pDate.getMonth()+1);
+        ({start,end}=cur);prevStart=prev.start;prevEnd=prev.end;
+      }else if(state.rangeMode==='week'){
+        start=$('weekSelect').value;end=shiftDays(start,6);prevStart=shiftDays(start,-7);prevEnd=shiftDays(start,-1);
+      }else{
+        start=end=$('daySelect').value;prevStart=prevEnd=shiftDays(start,-1);
+      }
+      return {start,end,prevStart,prevEnd,periodDays:daysBetween(start,end),prevPeriodDays:daysBetween(prevStart,prevEnd)};
+    }
+    function periodLabels(mode=state.rangeMode){
+      return mode==='year'?{current:'當年',previous:'前年'}:mode==='month'?{current:'當月',previous:'前月'}:mode==='week'?{current:'當週',previous:'前週'}:{current:'當日',previous:'前日'};
+    }
+    function improvement(cur,prev){
+      if(!Number.isFinite(prev)) return {kind:'flat',label:'無比較資料',delta:NaN,pct:NaN};
+      const delta=cur-prev, pct=prev!==0?(prev-cur)/prev*100:(cur===0?0:NaN);
+      if(delta < -.05) return {kind:'good',label:'改善',delta,pct};
+      if(delta > .05) return {kind:'bad',label:'增加',delta,pct};
+      return {kind:'flat',label:'持平',delta,pct};
+    }
+    function render(){
+      const r=selectedRanges(), currentDays=filtered(r.start,r.end), previousDays=filtered(r.prevStart,r.prevEnd);
+      const cur=summarize(currentDays,r.periodDays), prev=summarize(previousDays,r.prevPeriodDays);
+      renderCards(cur,prev,r.periodDays,currentDays);
+      renderDetail(r);
+      renderCharts(r,currentDays,cur,prev);
+    }
+    function renderCards(cur,prev,periodDays,currentDays){
+      $('lineCards').innerHTML=state.data.lines.map((line,i)=>{
+        const a=cur[line.id], b=prev[line.id], imp=improvement(a.avg,b.avg), longest=averageLongestProduct(currentDays,line.id);
+        const delta=Number.isFinite(imp.delta)?`${imp.delta>0?'+':''}${fmt(imp.delta)} 分`:'—';
+        const longestText=longest?`${esc(longest.product)} ${fmt(longest.avg)} 分`:'無換線記錄';
+        return `<article class="panel line-card${state.selectedLine===line.id?' active':''}" style="--accent:${COLORS[i]}" data-line="${line.id}" role="button" tabindex="0" aria-pressed="${state.selectedLine===line.id}"><div class="line-name">${esc(line.name)}</div><div><span class="avg">${fmt(a.avg)}</span> <span class="unit">分</span></div><div class="compare"><span class="delta">較${periodLabels().previous} ${delta}</span><span class="badge ${imp.kind}">${imp.label}</span></div><div class="card-meta">${periodDays} 天平均 ｜ 平均換線最久品項：${longestText}</div></article>`;
+      }).join('');
+    }
+    function renderDetail(range){
+      const panel=$('detailPanel'), line=state.data.lines.find(x=>x.id===state.selectedLine);
+      if(!line){panel.hidden=true;return;}
+      panel.hidden=false;
+      $('detailTitle').textContent=`${line.name}｜每日平均換線時間明細`;
+      $('detailMeta').textContent=`${range.start} ～ ${range.end}，共 ${range.periodDays} 天；每日平均＝當日合格品項換線時間加總 ÷ 當日合格次數`;
+      const byDate=new Map(state.data.days.map(day=>[day.date,day]));
+      const rows=[];
+      for(let date=range.start;date<=range.end;date=shiftDays(date,1)){
+        const x=byDate.get(date)?.lines?.[line.id]||{}, items=Array.isArray(x.items)?x.items:[], count=Number(x.count||0), minutes=Number(x.minutes||0), avg=count?minutes/count:0;
+        const longest=items.reduce((best,item)=>!best||Number(item.minutes)>Number(best.minutes)?item:best,null);
+        const itemHtml=longest?`<span class="item-time">${esc(longest.product||'未命名品項')} <b>${fmt(Number(longest.minutes))} 分</b></span>`:'<span class="no-items">無換線記錄</span>';
+        rows.push(`<tr><td class="detail-date">${date}</td><td class="detail-avg">${fmt(avg)} 分</td><td>${itemHtml}</td></tr>`);
+      }
+      $('detailBody').innerHTML=rows.join('');
+    }
+    function reasonForLine(line,currentDays,previousDays,cur,prev){
+      const labels=periodLabels();
+      const current=productStats(currentDays,line.id), previous=productStats(previousDays,line.id), previousMap=new Map(previous.map(x=>[x.product,x]));
+      const imp=improvement(cur[line.id].avg,prev[line.id].avg), changes=current.map(x=>({product:x.product,current:x.avg,previous:previousMap.get(x.product)?.avg??null,diff:x.avg-(previousMap.get(x.product)?.avg??x.avg)}));
+      let driver=null;
+      if(imp.kind==='bad')driver=changes.filter(x=>x.previous!==null).sort((a,b)=>b.diff-a.diff)[0]||null;
+      if(imp.kind==='good')driver=changes.filter(x=>x.previous!==null).sort((a,b)=>a.diff-b.diff)[0]||null;
+      if(driver&&((imp.kind==='bad'&&driver.diff>0.05)||(imp.kind==='good'&&driver.diff<-.05))){
+        const direction=driver.diff>0?'增加':'減少';
+        return `推估主因為「${driver.product}」平均換線時間由 ${fmt(driver.previous)} 分${direction}至 ${fmt(driver.current)} 分（${driver.diff>0?'+':''}${fmt(driver.diff)} 分）。`;
+      }
+      const longest=current[0];
+      if(longest&&!previousMap.has(longest.product))return `${labels.current}平均換線最久品項為「${longest.product}」${fmt(longest.avg)} 分，${labels.previous}無同品項記錄，可能是影響${labels.current}結果的新增因素。`;
+      if(longest)return `${labels.current}平均換線最久品項為「${longest.product}」${fmt(longest.avg)} 分；目前沒有單一品項的升降幅度足以明確解釋整體變化。`;
+      return `${labels.current}無合格換線記錄，暫無品項層級原因可分析。`;
+    }
+    function reportData(range,currentDays,previousDays,cur,prev){
+      const results=state.data.lines.map(line=>({line,imp:improvement(cur[line.id].avg,prev[line.id].avg),cur:cur[line.id],prev:prev[line.id],reason:reasonForLine(line,currentDays,previousDays,cur,prev)}));
+      return {range,results,labels:periodLabels(),improved:results.filter(x=>x.imp.kind==='good').length,increased:results.filter(x=>x.imp.kind==='bad').length,flat:results.filter(x=>x.imp.kind==='flat').length};
+    }
+    function reportCanvas(){const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=1131;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.textBaseline='alphabetic';return{canvas,ctx};}
+    function roundedBox(ctx,x,y,w,h,r,fill,stroke='#dce6f2'){
+      ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke();
+    }
+    function wrapCanvasText(ctx,text,maxWidth){const lines=[];let line='';for(const ch of String(text)){const next=line+ch;if(line&&ctx.measureText(next).width>maxWidth){lines.push(line);line=ch;}else line=next;}if(line)lines.push(line);return lines;}
+    function drawReportHeader(ctx,title,subtitle){ctx.fillStyle='#10223f';ctx.font='900 40px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(title,55,68);ctx.fillStyle='#5b708c';ctx.font='700 22px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(subtitle,55,108);}
+    function drawKpis(ctx,data){
+      const items=[['換線時間改善線別',data.improved],['換線時間增加線別',data.increased],['換線時間持平線別',data.flat]],gap=18,w=(1490-gap*2)/3;
+      items.forEach(([label,value],i)=>{const x=55+i*(w+gap);roundedBox(ctx,x,145,w,128,18,'#f7faff');ctx.fillStyle='#506884';ctx.font='800 21px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(label,x+24,187);ctx.fillStyle='#10223f';ctx.font='900 40px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(`${value} 條`,x+24,244);});
+    }
+    function drawReportChart(ctx,data){
+      const x=105,y=335,w=1435,h=570,bottom=y+h,values=data.results.flatMap(r=>[r.cur.avg,r.prev.avg]),max=Math.max(1,...values),yMax=Math.max(1,Math.ceil(max+.5)),steps=7;
+      ctx.font='700 19px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
+      for(let i=0;i<=steps;i++){const value=yMax*i/steps,py=bottom-h*i/steps;ctx.strokeStyle='#dfe7f0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,py);ctx.lineTo(x+w,py);ctx.stroke();ctx.fillStyle='#60738b';ctx.fillText(`${value.toFixed(value%1?1:0)}分`,x-14,py);}
+      const groupW=w/data.results.length,barW=Math.min(48,groupW*.3);
+      data.results.forEach((r,i)=>{const center=x+groupW*(i+.5),curH=h*r.cur.avg/yMax,prevH=h*r.prev.avg/yMax;ctx.fillStyle='#1967d2';ctx.fillRect(center-barW-3,bottom-curH,barW,curH);ctx.fillStyle='#b9c6d6';ctx.fillRect(center+3,bottom-prevH,barW,prevH);ctx.fillStyle='#405570';ctx.textAlign='center';ctx.textBaseline='top';ctx.font='800 19px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(r.line.name,center,bottom+18);});
+      ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle='#1967d2';ctx.beginPath();ctx.arc(680,305,10,0,Math.PI*2);ctx.fill();ctx.fillStyle='#405570';ctx.font='800 20px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(data.labels.current,699,305);ctx.fillStyle='#b9c6d6';ctx.beginPath();ctx.arc(778,305,10,0,Math.PI*2);ctx.fill();ctx.fillStyle='#405570';ctx.fillText(data.labels.previous,797,305);ctx.textAlign='start';ctx.textBaseline='alphabetic';
+    }
+    function drawAnalysisPage(ctx,data){
+      drawReportHeader(ctx,'各線別換線時間原因分析',`${data.labels.current} ${data.range.start} ～ ${data.range.end}；${data.labels.previous} ${data.range.prevStart} ～ ${data.range.prevEnd}`);
+      const gap=20,w=735,h=222,startY=140;
+      data.results.forEach((r,i)=>{const col=i%2,row=Math.floor(i/2),x=55+col*(w+gap),y=startY+row*(h+18),delta=r.cur.avg-r.prev.avg,deltaText=`${delta>0?'+':''}${fmt(delta)} 分`,color=r.imp.kind==='good'?'#087f5b':r.imp.kind==='bad'?'#c2413b':'#53657a',soft=r.imp.kind==='good'?'#dff7ee':r.imp.kind==='bad'?'#ffe7e3':'#edf2f7';roundedBox(ctx,x,y,w,h,18,'#fff');ctx.fillStyle='#10223f';ctx.font='900 26px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(r.line.name,x+22,y+42);ctx.font='800 19px "Microsoft JhengHei","Noto Sans TC",sans-serif';const badge=`${r.imp.label} ${deltaText}`,bw=ctx.measureText(badge).width+28;roundedBox(ctx,x+w-bw-20,y+16,bw,42,21,soft,soft);ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(badge,x+w-bw/2-20,y+37);ctx.textAlign='start';ctx.textBaseline='alphabetic';ctx.fillStyle='#435873';ctx.font='700 20px "Microsoft JhengHei","Noto Sans TC",sans-serif';const body=`${data.labels.current} ${fmt(r.cur.avg)} 分，${data.labels.previous} ${fmt(r.prev.avg)} 分。${r.reason}`,lines=wrapCanvasText(ctx,body,w-44).slice(0,4);lines.forEach((line,j)=>ctx.fillText(line,x+22,y+91+j*31));});
+      ctx.fillStyle='#77889d';ctx.font='650 17px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(`註：原因分析依品項平均換線時間的${data.labels.current}與${data.labels.previous}變化推估，建議搭配現場紀錄確認。`,55,1100);
+    }
+    async function downloadReportPdf(){
+      if(!window.PDFLib)throw new Error('PDF 元件載入失敗');
+      const range=selectedRanges(),currentDays=filtered(range.start,range.end),previousDays=filtered(range.prevStart,range.prevEnd),cur=summarize(currentDays,range.periodDays),prev=summarize(previousDays,range.prevPeriodDays),data=reportData(range,currentDays,previousDays,cur,prev);
+      const page1=reportCanvas(),page2=reportCanvas(),subtitle=`${data.labels.current} ${range.start} ～ ${range.end}；${data.labels.previous} ${range.prevStart} ～ ${range.prevEnd}`;
+      drawReportHeader(page1.ctx,'晉欣換線時間分析報告',subtitle);drawKpis(page1.ctx,data);drawReportChart(page1.ctx,data);page1.ctx.fillStyle='#77889d';page1.ctx.font='650 18px "Microsoft JhengHei","Noto Sans TC",sans-serif';page1.ctx.fillText('平均換線時間越低代表改善；計算依目前網站所選年／月／週／日範圍。',55,1085);drawAnalysisPage(page2.ctx,data);
+      const pdf=await PDFLib.PDFDocument.create();
+      for(const canvas of [page1.canvas,page2.canvas]){const bytes=await (await fetch(canvas.toDataURL('image/png'))).arrayBuffer(),image=await pdf.embedPng(bytes),page=pdf.addPage([841.89,595.28]);page.drawImage(image,{x:0,y:0,width:841.89,height:595.28});}
+      const bytes=await pdf.save(),url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),a=document.createElement('a');a.href=url;a.download=`晉欣換線時間分析報告_${range.start}_${range.end}.pdf`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+    function trendBuckets(range,days){
+      const byDate=new Map(days.map(x=>[x.date,x])),buckets=[];
+      if(state.rangeMode==='year'){
+        const year=Number(range.start.slice(0,4));
+        for(let month=1;month<=12;month++){const m=monthRange(year,month),periodDays=daysBetween(m.start,m.end);buckets.push({label:`${month}月`,days:filtered(m.start,m.end),periodDays});}
+      }else{
+        for(let d=range.start;d<=range.end;d=shiftDays(d,1))buckets.push({label:shortDate(d),days:byDate.has(d)?[byDate.get(d)]:[],periodDays:1});
+      }
+      return buckets;
+    }
+    function renderCharts(range,currentDays,cur,prev){
+      const buckets=trendBuckets(range,currentDays);
+      const labels=periodLabels();
+      $('compareTitle').textContent=`${labels.current}與${labels.previous}對比`;
+      $('trendMeta').textContent=state.rangeMode==='year'?'12 個月別區間':`${buckets.length} 個日別區間`;
+      if(state.trend) state.trend.destroy();
+      state.trend=new Chart($('trendChart'),{type:'line',data:{labels:buckets.map(x=>x.label),datasets:state.data.lines.map((line,i)=>({label:line.name,data:buckets.map(b=>summarize(b.days,b.periodDays)[line.id].avg),borderColor:COLORS[i],backgroundColor:COLORS[i],borderWidth:2.5,pointRadius:buckets.length>24?0:3,pointHoverRadius:5,tension:.25,hidden:!state.visible.has(line.id)}))},options:chartOptions()});
+      if(state.compare) state.compare.destroy();
+      state.compare=new Chart($('compareChart'),{type:'bar',data:{labels:state.data.lines.map(x=>x.name),datasets:[{label:labels.current,data:state.data.lines.map(x=>cur[x.id].avg),backgroundColor:'#1967d2',borderRadius:6},{label:labels.previous,data:state.data.lines.map(x=>prev[x.id].avg),backgroundColor:'#b9c6d6',borderRadius:6}]},options:{...chartOptions(),plugins:{...chartOptions().plugins,legend:{display:true,labels:{font:{weight:'bold'},usePointStyle:true}}}}});
+    }
+    function chartOptions(){ return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}：${fmt(Number(c.raw))} 分`}}},scales:{x:{grid:{display:false},ticks:{color:'#60738b',font:{weight:'bold'},maxRotation:0,autoSkip:true,maxTicksLimit:14}},y:{beginAtZero:true,grid:{color:'#e8eef5'},ticks:{color:'#60738b',callback:v=>`${v}分`},title:{display:true,text:'平均換線時間（分）',color:'#60738b',font:{weight:'bold'}}}}}; }
+    function refreshYearOptions(){
+      const keep=$('yearSelect').value, min=Number(state.data.minDate.slice(0,4)),max=Number(state.data.maxDate.slice(0,4));
+      $('yearSelect').innerHTML=Array.from({length:max-min+1},(_,i)=>max-i).map(y=>`<option value="${y}">${y} 年</option>`).join('');
+      $('yearSelect').value=[...$('yearSelect').options].some(o=>o.value===keep)?keep:String(max);
+    }
+    function fillMonths(selectId){$(selectId).innerHTML=Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1} 月</option>`).join('');}
+    function refreshWeeks(){
+      const year=Number($('yearSelect').value),month=Number($('weekMonthSelect').value),first=new Date(year,month-1,1),last=new Date(year,month,0);
+      const offset=(first.getDay()+5)%7;first.setDate(first.getDate()-offset);
+      const options=[];for(let d=new Date(first);d<=last;d.setDate(d.getDate()+7)){const start=iso(d),end=shiftDays(start,6);options.push(`<option value="${start}">${shortDate(start)}～${shortDate(end)}</option>`);}
+      $('weekSelect').innerHTML=options.join('');
+      const max=state.data.maxDate;if(Number(max.slice(0,4))===year&&Number(max.slice(5,7))===month){const match=[...$('weekSelect').options].find(o=>o.value<=max&&shiftDays(o.value,6)>=max);if(match)$('weekSelect').value=match.value;}
+    }
+    function updatePanels(){
+      for(const mode of ['year','month','week','day']){$(`${mode}Panel`).hidden=mode!==state.rangeMode;document.querySelector(`[data-mode="${mode}"]`).classList.toggle('active',mode===state.rangeMode);}
+    }
+    function setupControls(){
+      refreshYearOptions();fillMonths('monthSelect');fillMonths('weekMonthSelect');
+      const max=state.data.maxDate;$('yearSelect').value=max.slice(0,4);$('monthSelect').value=String(Number(max.slice(5,7)));$('weekMonthSelect').value=String(Number(max.slice(5,7)));$('daySelect').value=max;refreshWeeks();updatePanels();setupDateBounds();
+      $('rangeSwitch').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b)return;state.rangeMode=b.dataset.mode;updatePanels();render();});
+      $('yearSelect').addEventListener('change',()=>{const year=$('yearSelect').value;if(state.rangeMode==='day'){const candidates=state.data.days.filter(d=>d.date.startsWith(`${year}-`));$('daySelect').value=candidates.at(-1)?.date||`${year}-01-01`;}refreshWeeks();setupDateBounds();render();});
+      $('monthSelect').addEventListener('change',render);$('weekMonthSelect').addEventListener('change',()=>{refreshWeeks();render();});$('weekSelect').addEventListener('change',render);$('daySelect').addEventListener('change',render);
+      $('importBtn').addEventListener('click',()=>$('fileInput').click()); $('fileInput').addEventListener('change',importFiles);
+      $('exportBtn').addEventListener('click',exportCsv);
+      const openDetail=card=>{if(!card)return;state.selectedLine=card.dataset.line;render();requestAnimationFrame(()=>$('detailPanel').scrollIntoView({behavior:'smooth',block:'nearest'}));};
+      $('lineCards').addEventListener('click',e=>openDetail(e.target.closest('.line-card')));
+      $('lineCards').addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const card=e.target.closest('.line-card');if(!card)return;e.preventDefault();openDetail(card);});
+      $('closeDetail').addEventListener('click',()=>{state.selectedLine=null;render();});
+      $('generateReport').addEventListener('click',async()=>{const b=$('generateReport'),label=b.textContent;b.disabled=true;b.textContent='正在產生 PDF…';try{await downloadReportPdf();}catch(err){console.error(err);alert(err.message||'PDF 產生失敗');}finally{b.disabled=false;b.textContent=label;}});
+      $('linePicker').innerHTML=state.data.lines.map((x,i)=>`<button class="line-chip" data-line="${x.id}" style="--chip:${COLORS[i]}"><i></i>${esc(x.name)}</button>`).join('');
+      $('linePicker').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const id=b.dataset.line;if(state.visible.has(id))state.visible.delete(id);else state.visible.add(id);b.classList.toggle('off',!state.visible.has(id));render();});
+    }
+    function exportCsv(){
+      const r=selectedRanges(), cur=summarize(filtered(r.start,r.end),r.periodDays), prev=summarize(filtered(r.prevStart,r.prevEnd),r.prevPeriodDays);
+      const labels=periodLabels(),rows=[['線別',`${labels.current}平均(分)`,`${labels.previous}平均(分)`,'差異(分)',`${labels.current}天數`,`${labels.current}合格次數`]];
+      for(const line of state.data.lines){const a=cur[line.id],b=prev[line.id];rows.push([line.name,fmt(a.avg),fmt(b.avg),fmt(a.avg-b.avg),r.periodDays,a.count]);}
+      const csv='\ufeff'+rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\r\n'); const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`晉欣各線別換線時間_${r.start}_${r.end}.csv`;a.click();URL.revokeObjectURL(a.href);
+    }
+
+    const clean=v=>String(v??'').normalize('NFKC').replace(/\s+/g,'');
+    const canonicalLine=raw=>{const s=clean(raw);const defs=[['four1',/^四度一組/],['four2',/^四度二組/],['four3',/^四度三組/],['four4',/^四度四組/],['mix1',/^綜合一組/],['mix2',/^綜合二組/],['mix3',/^綜合三組/]];return(defs.find(([,r])=>r.test(s))||[])[0]||null;};
+    function parseUploadedWorkbook(buffer,name){
+      const ym=clean(name).match(/(?:^|[^0-9])(\d{3})[.\-_/](\d{1,2})[.\-_/]/); if(!ym) throw new Error(`${name}：檔名無法判斷年份`); const year=Number(ym[1])+1911;
+      const wb=XLSX.read(buffer,{type:'array'}), parsed=[];
+      for(const sn of wb.SheetNames){const sm=clean(sn).match(/^晉欣4度C(\d{2})(\d{2})$/i);if(!sm)continue;const grid=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''});let h=null;
+        for(let r=0;r<Math.min(grid.length,30);r++){const row=grid[r]||[],li=row.findIndex(v=>clean(v)==='線別'),ci=row.findIndex(v=>clean(v).includes('換線')&&clean(v).includes('分'));if(li>=0&&ci>=0){let pi=row.findIndex(v=>clean(v)==='品名');if(pi<0)pi=row.findIndex(v=>/品名|品項|品種/.test(clean(v)));h={r,li,ci,pi,ri:row.findIndex(v=>clean(v).includes('休息時間'))};break;}}
+        if(!h)continue;const lines=Object.fromEntries(state.data.lines.map(x=>[x.id,{minutes:0,count:0,excludedOver20:0,excludedRest:0,items:[]}]));let line=null;const rs=h.ri>=0?h.ri:h.ci+2;
+        for(let r=h.r+1;r<grid.length;r++){const row=grid[r]||[];if(clean(row[h.li]))line=canonicalLine(row[h.li]);if(!line)continue;const n=Number(String(row[h.ci]??'').replaceAll(',',''));if(!Number.isFinite(n)||n<=0)continue;if(clean(row[rs])||clean(row[rs+1]))lines[line].excludedRest++;else if(n>20)lines[line].excludedOver20++;else{const product=h.pi>=0?String(row[h.pi]??'').trim():'';lines[line].minutes+=n;lines[line].count++;lines[line].items.push({product:product||'未命名品項',minutes:n});}}
+        parsed.push({date:`${year}-${sm[1]}-${sm[2]}`,lines});
+      } return parsed;
+    }
+    async function importFiles(){
+      const files=[...$('fileInput').files];if(!files.length)return;setStatus(`正在匯入 ${files.length} 份日報`);$('app').classList.add('loading');
+      try{const map=new Map(state.data.days.map(x=>[x.date,x]));let count=0;for(const file of files){for(const day of parseUploadedWorkbook(await file.arrayBuffer(),file.name)){map.set(day.date,day);count++;}}state.data.days=[...map.values()].sort((a,b)=>a.date.localeCompare(b.date));state.data.minDate=state.data.days[0].date;state.data.maxDate=state.data.days.at(-1).date;setStatus(`已載入 ${state.data.days.length} 個日報日`,true);setupDateBounds();render();alert(`已匯入並更新 ${count} 個日報日。`);}catch(err){console.error(err);setStatus('匯入失敗');alert(err.message||'匯入失敗');}finally{$('app').classList.remove('loading');$('fileInput').value='';}
+    }
+    function setupDateBounds(){
+      const keepYear=$('yearSelect').value;refreshYearOptions();if(keepYear&&[...$('yearSelect').options].some(o=>o.value===keepYear))$('yearSelect').value=keepYear;
+      const year=$('yearSelect').value,min=`${year}-01-01`,max=`${year}-12-31`;$('daySelect').min=min;$('daySelect').max=max;
+      if(!$('daySelect').value||$('daySelect').value<min||$('daySelect').value>max){const candidates=state.data.days.filter(d=>d.date.startsWith(`${year}-`));$('daySelect').value=candidates.at(-1)?.date||min;}
+    }
+    function reportSpan(name){const m=clean(name).match(/(?:^|[^0-9])(\d{3})[.\-_/](\d{1,2})[.\-_/](\d{1,2})[-~～至](\d{1,2})/);return m?{year:Number(m[1])+1911,month:Number(m[2]),start:Number(m[3]),end:Number(m[4])}:null;}
+    function chooseLatestFiles(files){const best=new Map();for(const file of files){const span=reportSpan(file);if(!span)continue;const key=`${span.year}-${span.month}-${span.start}`,prior=best.get(key);if(!prior||span.end>prior.span.end||(span.end===prior.span.end&&file>prior.file))best.set(key,{file,span});}return[...best.values()].sort((a,b)=>a.span.year-b.span.year||a.span.month-b.span.month||a.span.start-b.span.start);}
+    function mergeParsed(parsed){const map=new Map(state.data.days.map(x=>[x.date,x]));for(const day of parsed)map.set(day.date,day);state.data.days=[...map.values()].sort((a,b)=>a.date.localeCompare(b.date));state.data.minDate=state.data.days[0]?.date||'';state.data.maxDate=state.data.days.at(-1)?.date||'';}
+    async function loadRemoteFile(entry){const url=new URL(`data/${entry.file}`,SOURCE_ROOT).href,res=await fetch(url,{cache:'no-store'});if(!res.ok)throw new Error(`${entry.file}：HTTP ${res.status}`);mergeParsed(parseUploadedWorkbook(await res.arrayBuffer(),entry.file));}
+    async function init(){
+      try{
+        for(const line of state.data.lines)state.visible.add(line.id);
+        const manifestRes=await fetch(new URL('data/manifest.json',SOURCE_ROOT),{cache:'no-store'});if(!manifestRes.ok)throw new Error(`manifest HTTP ${manifestRes.status}`);
+        const manifest=await manifestRes.json(), files=chooseLatestFiles(manifest.files||[]);if(!files.length)throw new Error('manifest 內沒有可讀取的日報');
+        const recent=files.slice(-3),older=files.slice(0,-3).reverse();
+        let loaded=0;for(const entry of recent){setStatus(`載入近期資料 ${loaded+1}/${recent.length}`);await loadRemoteFile(entry);loaded++;}
+        setupControls();state.controlsReady=true;setStatus(`已載入近期 ${state.data.days.length} 個日報日`,true);render();
+        for(let i=0;i<older.length;i++){
+          setStatus(`背景載入歷史資料 ${i+1}/${older.length}`);
+          try{await loadRemoteFile(older[i]);setupDateBounds();}catch(err){console.warn(err);}
+          await new Promise(resolve=>setTimeout(resolve,0));
+        }
+        setStatus(`已同步 ${state.data.days.length} 個日報日`,true);render();
+      }catch(err){console.error(err);setStatus('資料載入失敗');$('lineCards').innerHTML='<div class="panel empty">無法讀取晉欣日報 manifest，請確認來源網站可正常存取。</div>';}
+    }
+    init();
+  </script>
+</body>
+</html>
