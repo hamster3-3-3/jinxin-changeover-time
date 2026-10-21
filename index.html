@@ -88,6 +88,9 @@
     .report-launch .btn { min-width: 240px; padding: .82rem 1.2rem; }
     .chart-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(360px, .85fr); gap: 14px; }
     .chart-panel { padding: 18px; min-width: 0; }
+    .comparison-panel { margin-top: 20px; }
+    .comparison-scroll { overflow-x: auto; }
+    .comparison-wrap { min-width: 1040px; height: 410px; }
     .chart-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 10px; }
     .chart-title strong { font-size: 1rem; }
     .chart-title span { color: var(--muted); font-size: .8rem; font-weight: 700; }
@@ -139,6 +142,11 @@
     <div class="section-head"><div><h2>各線別改善概況</h2><p>數值越低代表平均換線時間越短。</p></div><div class="line-selection-actions"><button class="btn" id="selectAllLines" type="button">全選</button><button class="btn" id="clearAllLines" type="button">清空</button></div></div>
     <div class="line-picker" id="linePicker" role="group" aria-label="選擇顯示線別"></div>
     <section class="line-cards" id="lineCards" aria-live="polite"></section>
+    <section class="panel chart-panel comparison-panel" aria-label="各線別前後期間對比">
+      <div class="chart-title"><strong id="compareTitle">當月與前月對比</strong><span>分</span></div>
+      <div class="comparison-scroll"><div class="chart-wrap comparison-wrap"><canvas id="compareChart"></canvas></div></div>
+    </section>
+
     <section class="panel detail-panel" id="detailPanel" hidden>
       <div class="detail-head">
         <div><h3 id="detailTitle">計算明細表</h3><p id="detailMeta"></p></div>
@@ -229,7 +237,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const SOURCE_ROOT = 'https://hamster3-3-3.github.io/jinxin-dashboard/';
     const LINES = [{id:'four1',name:'四度一線'},{id:'four2',name:'四度二線'},{id:'four3',name:'四度三線'},{id:'four4',name:'四度四線'},{id:'mix1',name:'綜合一線'},{id:'mix2',name:'綜合二線'},{id:'mix3',name:'綜合三線'},{id:'bigmouth',name:'大口線'},{id:'four2hot',name:'四度二組A熱麵固定線(ET-55)'},{id:'four2octopus',name:'四度二組(烤飯糰/八爪機)'},{id:'four2ten',name:'四度二組(烤飯糰/十爪機)'},{id:'four5',name:'四度五線'},{id:'mix4',name:'綜合四線'}];
     const COLORS = ['#1967d2','#8b5cf6','#0891b2','#d97706','#16a34a','#e11d48','#52677f','#db2777','#0d9488','#9333ea','#b45309','#0284c7','#64748b'];
-    const state = {data:{lines:LINES,days:[],minDate:'',maxDate:''}, visible:new Set(), controlsReady:false, rangeMode:'month', selectedLine:null};
+    const state = {data:{lines:LINES,days:[],minDate:'',maxDate:''}, visible:new Set(), compare:null, controlsReady:false, rangeMode:'month', selectedLine:null};
     const $ = id => document.getElementById(id);
     const dateOnly = value => new Date(value + 'T00:00:00');
     const iso = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -299,6 +307,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       renderTotal(currentDays,previousDays);
       renderCards(cur,prev,currentDays);
       renderDetail(r);
+      renderComparison(cur,prev);
 
     }
     function totalStats(days){
@@ -396,6 +405,22 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       for(const canvas of canvases){const bytes=await (await fetch(canvas.toDataURL('image/png'))).arrayBuffer(),image=await pdf.embedPng(bytes),page=pdf.addPage([841.89,595.28]);page.drawImage(image,{x:0,y:0,width:841.89,height:595.28});}
       const bytes=await pdf.save(),url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),a=document.createElement('a');a.href=url;a.download=`晉欣換線時間分析報告_${range.start}_${range.end}.pdf`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
     }
+    function renderComparison(cur,prev){
+      const labels=periodLabels();
+      $('compareTitle').textContent=`各線別${labels.current}與${labels.previous}對比`;
+      if(state.compare)state.compare.destroy();
+      const lineLabel=line=>line.id==='four2hot'?['四度二組A','熱麵固定線','(ET-55)']:line.id==='four2octopus'?['四度二組','烤飯糰/八爪機']:line.id==='four2ten'?['四度二組','烤飯糰/十爪機']:line.name;
+      const options=chartOptions();
+      state.compare=new Chart($('compareChart'),{
+        type:'bar',
+        data:{labels:state.data.lines.map(lineLabel),datasets:[
+          {label:labels.current,data:state.data.lines.map(line=>cur[line.id].avg),backgroundColor:'#1967d2',borderRadius:6},
+          {label:labels.previous,data:state.data.lines.map(line=>prev[line.id].avg),backgroundColor:'#b9c6d6',borderRadius:6}
+        ]},
+        options:{...options,plugins:{...options.plugins,legend:{display:true,labels:{font:{weight:'bold'},usePointStyle:true}}},scales:{...options.scales,x:{...options.scales.x,ticks:{...options.scales.x.ticks,autoSkip:false}}}}
+      });
+    }
+    function chartOptions(){ return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}：${fmt(Number(c.raw))} 分`}}},scales:{x:{grid:{display:false},ticks:{color:'#60738b',font:{weight:'bold'},maxRotation:0,autoSkip:true,maxTicksLimit:14}},y:{beginAtZero:true,grid:{color:'#e8eef5'},ticks:{color:'#60738b',callback:v=>`${v}分`},title:{display:true,text:'平均換線時間（分）',color:'#60738b',font:{weight:'bold'}}}}}; }
     function refreshYearOptions(){
       const keep=$('yearSelect').value, min=Number(state.data.minDate.slice(0,4)),max=Number(state.data.maxDate.slice(0,4));
       $('yearSelect').innerHTML=Array.from({length:max-min+1},(_,i)=>max-i).map(y=>`<option value="${y}">${y} 年</option>`).join('');
