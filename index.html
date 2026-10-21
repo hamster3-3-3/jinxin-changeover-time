@@ -243,7 +243,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const iso = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
     const shiftDays = (value, amount) => { const d=dateOnly(value); d.setDate(d.getDate()+amount); return iso(d); };
     const daysBetween = (a,b) => Math.round((dateOnly(b)-dateOnly(a))/86400000)+1;
-    const fmt = n => Number.isFinite(n) ? n.toFixed(1) : '—';
+    const fmt = n => Number.isFinite(n) ? n.toFixed(2) : '—';
     const shortDate = s => `${Number(s.slice(5,7))}/${Number(s.slice(8,10))}`;
     const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -384,7 +384,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     function drawReportChart(ctx,data){
       const x=105,y=335,w=1435,h=570,bottom=y+h,values=data.results.flatMap(r=>[r.cur.avg,r.prev.avg]),max=Math.max(1,...values),yMax=Math.max(1,Math.ceil(max+.5)),steps=7;
       ctx.font='700 19px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
-      for(let i=0;i<=steps;i++){const value=yMax*i/steps,py=bottom-h*i/steps;ctx.strokeStyle='#dfe7f0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,py);ctx.lineTo(x+w,py);ctx.stroke();ctx.fillStyle='#60738b';ctx.fillText(`${value.toFixed(value%1?1:0)}分`,x-14,py);}
+      for(let i=0;i<=steps;i++){const value=yMax*i/steps,py=bottom-h*i/steps;ctx.strokeStyle='#dfe7f0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,py);ctx.lineTo(x+w,py);ctx.stroke();ctx.fillStyle='#60738b';ctx.fillText(`${value.toFixed(2)}分`,x-14,py);}
       const groupW=w/data.results.length,barW=Math.min(48,groupW*.3);
       data.results.forEach((r,i)=>{const center=x+groupW*(i+.5),curH=h*r.cur.avg/yMax,prevH=h*r.prev.avg/yMax;ctx.fillStyle='#1967d2';ctx.fillRect(center-barW-3,bottom-curH,barW,curH);ctx.fillStyle='#b9c6d6';ctx.fillRect(center+3,bottom-prevH,barW,prevH);ctx.fillStyle='#405570';ctx.textAlign='center';ctx.textBaseline='top';ctx.font='800 19px "Microsoft JhengHei","Noto Sans TC",sans-serif';wrapCanvasText(ctx,r.line.name,groupW-8).forEach((text,j)=>ctx.fillText(text,center,bottom+18+j*24));});
       ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle='#1967d2';ctx.beginPath();ctx.arc(680,305,10,0,Math.PI*2);ctx.fill();ctx.fillStyle='#405570';ctx.font='800 20px "Microsoft JhengHei","Noto Sans TC",sans-serif';ctx.fillText(data.labels.current,699,305);ctx.fillStyle='#b9c6d6';ctx.beginPath();ctx.arc(778,305,10,0,Math.PI*2);ctx.fill();ctx.fillStyle='#405570';ctx.fillText(data.labels.previous,797,305);ctx.textAlign='start';ctx.textBaseline='alphabetic';
@@ -420,7 +420,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         options:{...options,plugins:{...options.plugins,legend:{display:true,labels:{font:{weight:'bold'},usePointStyle:true}}},scales:{...options.scales,x:{...options.scales.x,ticks:{...options.scales.x.ticks,autoSkip:false}}}}
       });
     }
-    function chartOptions(){ return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}：${fmt(Number(c.raw))} 分`}}},scales:{x:{grid:{display:false},ticks:{color:'#60738b',font:{weight:'bold'},maxRotation:0,autoSkip:true,maxTicksLimit:14}},y:{beginAtZero:true,grid:{color:'#e8eef5'},ticks:{color:'#60738b',callback:v=>`${v}分`},title:{display:true,text:'平均換線時間（分）',color:'#60738b',font:{weight:'bold'}}}}}; }
+    function chartOptions(){ return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}：${fmt(Number(c.raw))} 分`}}},scales:{x:{grid:{display:false},ticks:{color:'#60738b',font:{weight:'bold'},maxRotation:0,autoSkip:true,maxTicksLimit:14}},y:{beginAtZero:true,grid:{color:'#e8eef5'},ticks:{color:'#60738b',callback:v=>`${fmt(Number(v))}分`},title:{display:true,text:'平均換線時間（分）',color:'#60738b',font:{weight:'bold'}}}}}; }
     function refreshYearOptions(){
       const keep=$('yearSelect').value, min=Number(state.data.minDate.slice(0,4)),max=Number(state.data.maxDate.slice(0,4));
       $('yearSelect').innerHTML=Array.from({length:max-min+1},(_,i)=>max-i).map(y=>`<option value="${y}">${y} 年</option>`).join('');
