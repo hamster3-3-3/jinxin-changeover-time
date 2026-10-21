@@ -316,7 +316,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       for(const day of days) for(const line of state.data.lines){
         for(const item of day.lines?.[line.id]?.items||[]){
           const n=Number(item.minutes);
-          if(Number.isFinite(n)&&n>0&&n<=20){minutes+=n;count++;}
+          if(Number.isFinite(n)&&n>=4.5&&n<=20){minutes+=n;count++;}
         }
       }
       return {minutes,count,avg:count?minutes/count:NaN};
@@ -399,7 +399,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       if(!window.PDFLib)throw new Error('PDF 元件載入失敗');
       const range=selectedRanges(),currentDays=filtered(range.start,range.end),previousDays=filtered(range.prevStart,range.prevEnd),cur=summarize(currentDays),prev=summarize(previousDays),data=reportData(range,currentDays,previousDays,cur,prev);
       const page1=reportCanvas(),subtitle=`${data.labels.current} ${range.start} ～ ${range.end}；${data.labels.previous} ${range.prevStart} ～ ${range.prevEnd}`;
-      drawReportHeader(page1.ctx,'晉欣換線時間分析報告',subtitle);drawKpis(page1.ctx,data);drawReportChart(page1.ctx,data);page1.ctx.fillStyle='#77889d';page1.ctx.font='650 18px "Microsoft JhengHei","Noto Sans TC",sans-serif';page1.ctx.fillText(`平均總換線時間：${fmt(totalStats(currentDays).avg)} 分；${data.labels.previous} ${fmt(totalStats(previousDays).avg)} 分（${improvement(totalStats(currentDays).avg,totalStats(previousDays).avg).label}）。`,55,1045);page1.ctx.fillText('總平均＝全部產線合格品項換線時間加總 ÷ 合格筆數；超過 20 分鐘及休息紀錄不納入。',55,1085);
+      drawReportHeader(page1.ctx,'晉欣換線時間分析報告',subtitle);drawKpis(page1.ctx,data);drawReportChart(page1.ctx,data);page1.ctx.fillStyle='#77889d';page1.ctx.font='650 18px "Microsoft JhengHei","Noto Sans TC",sans-serif';page1.ctx.fillText(`平均總換線時間：${fmt(totalStats(currentDays).avg)} 分；${data.labels.previous} ${fmt(totalStats(previousDays).avg)} 分（${improvement(totalStats(currentDays).avg,totalStats(previousDays).avg).label}）。`,55,1045);page1.ctx.fillText('總平均＝全部產線合格品項換線時間加總 ÷ 合格筆數；小於 4 分 30 秒、超過 20 分鐘及休息紀錄不納入。',55,1085);
       const pdf=await PDFLib.PDFDocument.create();
       const canvases=[page1.canvas];for(let i=0;i<data.results.length;i+=8){const part=reportCanvas();drawAnalysisPage(part.ctx,{...data,results:data.results.slice(i,i+8)});canvases.push(part.canvas);}
       for(const canvas of canvases){const bytes=await (await fetch(canvas.toDataURL('image/png'))).arrayBuffer(),image=await pdf.embedPng(bytes),page=pdf.addPage([841.89,595.28]);page.drawImage(image,{x:0,y:0,width:841.89,height:595.28});}
@@ -479,13 +479,47 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const defs=[['four2hot',/^四度二組A|^四度二組.*熱麵/],['four2octopus',/^四度二組.*(?:烤飯糰.*八爪|八爪機)/],['four2ten',/^四度二組.*(?:烤飯糰.*十爪|十爪機)/],['four1',/^四度一組/],['four2',/^四度二組/],['four3',/^四度三組/],['four4',/^四度四組/],['four5',/^四度五組/],['mix1',/^綜合一組/],['mix2',/^綜合二組/],['mix3',/^綜合三組/],['mix4',/^綜合四組/],['bigmouth',/^(?:便當組[\(（]?)?大口(?:固定)?線?/]];
       return(defs.find(([,r])=>r.test(s))||[])[0]||null;
     };
+    function correctedLineSources(grid,header){
+      const sources=new Map(),width=Math.max(...grid.map(row=>row.length));
+      // Locate the right-side changeover column by its heading and adjacent line labels.
+      for(let col=header.ci+2;col<width;col++){
+        const hasHeading=grid.slice(0,30).some(row=>/換線/.test(clean(row[col]))&&/分/.test(clean(row[col])));
+        if(!hasHeading)continue;
+        for(let row=header.r+1;row<grid.length;row++){
+          const id=canonicalLine(grid[row]?.[col-1]);
+          if(id)sources.set(id,{column:col,headerRow:row});
+        }
+      }
+      return sources;
+    }
     function parseUploadedWorkbook(buffer,name){
       const ym=clean(name).match(/(?:^|[^0-9])(\d{3})[.\-_/](\d{1,2})[.\-_/]/); if(!ym) throw new Error(`${name}：檔名無法判斷年份`); const year=Number(ym[1])+1911;
       const wb=XLSX.read(buffer,{type:'array'}), parsed=[];
       for(const sn of wb.SheetNames){const sm=clean(sn).match(/^晉欣4度C(\d{2})(\d{2})$/i);if(!sm)continue;const grid=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''});let h=null;
         for(let r=0;r<Math.min(grid.length,30);r++){const row=grid[r]||[],li=row.findIndex(v=>clean(v)==='線別'),ci=row.findIndex(v=>clean(v).includes('換線')&&clean(v).includes('分'));if(li>=0&&ci>=0){let pi=row.findIndex(v=>clean(v)==='品名');if(pi<0)pi=row.findIndex(v=>/品名|品項|品種/.test(clean(v)));h={r,li,ci,pi,ri:row.findIndex(v=>clean(v).includes('休息時間'))};break;}}
-        if(!h)continue;const lines=Object.fromEntries(state.data.lines.map(x=>[x.id,{minutes:0,count:0,excludedOver20:0,excludedRest:0,items:[]}]));let line=null;const rs=h.ri>=0?h.ri:h.ci+2;
-        for(let r=h.r+1;r<grid.length;r++){const row=grid[r]||[];if(clean(row[h.li]))line=canonicalLine(row[h.li]);if(!line)continue;const n=Number(String(row[h.ci]??'').replaceAll(',',''));if(!Number.isFinite(n)||n<=0)continue;if(clean(row[rs])||clean(row[rs+1]))lines[line].excludedRest++;else if(n>20)lines[line].excludedOver20++;else{const product=h.pi>=0?String(row[h.pi]??'').trim():'';lines[line].minutes+=n;lines[line].count++;lines[line].items.push({product:product||'未命名品項',minutes:n});}}
+        if(!h)continue;const lines=Object.fromEntries(state.data.lines.map(x=>[x.id,{minutes:0,count:0,excludedOver20:0,excludedUnder4_5:0,excludedRest:0,items:[]}]));let line=null;const rs=h.ri>=0?h.ri:h.ci+2;
+        const correctedSources=correctedLineSources(grid,h);
+        for(let r=h.r+1;r<grid.length;r++){
+          const row=grid[r]||[];
+          if(clean(row[h.li]))line=canonicalLine(row[h.li]);
+          if(!line)continue;
+          const source=correctedSources.get(line);
+          // A number beside a side-area line heading is an average, not an item record.
+          if(source&&r===source.headerRow)continue;
+          const raw=row[source?source.column:h.ci];
+          if(raw==null||clean(raw)==='')continue;
+          const n=Number(String(raw).replaceAll(',',''));
+          if(!Number.isFinite(n)||n<=0)continue;
+          // The right-side values already account for rest; only original values need this check.
+          if(!source&&(clean(row[rs])||clean(row[rs+1])))lines[line].excludedRest++;
+          else if(n>20)lines[line].excludedOver20++;
+          else if(n<4.5)lines[line].excludedUnder4_5++;
+          else{
+            const product=h.pi>=0?String(row[h.pi]??'').trim():'';
+            lines[line].minutes+=n;lines[line].count++;
+            lines[line].items.push({product:product||'未命名品項',minutes:n});
+          }
+        }
         parsed.push({date:`${year}-${sm[1]}-${sm[2]}`,lines});
       } return parsed;
     }
